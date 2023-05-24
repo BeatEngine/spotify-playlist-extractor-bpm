@@ -290,15 +290,19 @@ public class Main{
             String s = new String(urlConnection.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             JSONObject jsonObject = new JSONObject(s);
 
-            JSONArray audioFeatures = jsonObject.getJSONArray("audio_features");
+            if(jsonObject.has("audio_features") && !jsonObject.isNull("audio_features")) {
 
-            for(int i = 0; i < audioFeatures.length(); i++)
-            {
-                final JSONObject feature = audioFeatures.getJSONObject(i);
-                final String tid = feature.getString("id");
-                int durationMs = feature.getInt("duration_ms");
-                float tempo = feature.getFloat("tempo");
-                features.put(tid, new Trackinfo((int)tempo, durationMs));
+                JSONArray audioFeatures = jsonObject.getJSONArray("audio_features");
+
+                if(!audioFeatures.isNull(0)) {
+                    for (int i = 0; i < audioFeatures.length(); i++) {
+                        final JSONObject feature = audioFeatures.getJSONObject(i);
+                        final String tid = feature.getString("id");
+                        int durationMs = feature.getInt("duration_ms");
+                        float tempo = feature.getFloat("tempo");
+                        features.put(tid, new Trackinfo((int) tempo, durationMs));
+                    }
+                }
             }
 
 
@@ -338,7 +342,25 @@ public class Main{
         }
         catch (final Exception e)
         {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
+            System.out.println("Alternative query...");
+            final Trackinfo[] trackinfo = new Trackinfo[1];
+            trackinfo[0] = null;
+            Thread thread = new Thread(() -> {
+                try {
+                    trackinfo[0] = querySong(songId);
+                } catch (IOException ex) {
+                    System.out.println("No info available: " + ex.getMessage());
+                }
+            });
+            thread.start();
+            final long a = Instant.now().toEpochMilli();
+            while (trackinfo[0] == null && Instant.now().toEpochMilli()-a < 11000);
+            if(trackinfo[0] != null)
+            {
+                return trackinfo[0];
+            }
+
         }
         return new Trackinfo(0, -1);
     }
@@ -488,48 +510,56 @@ public class Main{
         int c = 0;
         System.out.println("Fetching bpm: ");
 
-        /*final List<String> ids = new ArrayList<>();
+        final List<String> ids = new ArrayList<>();
         for (Track t : playlist)
         {
             ids.add(t.getId());
         }
 
-        Map<String, Trackinfo> trackFeatures = null;
+        Map<String, Trackinfo> trackFeatures = new HashMap<>();
         try {
-            trackFeatures = getTrackFeatures(ids);
+            Object[] array = ids.toArray();
+            for(int i = 0; i < ids.size(); i+=100)
+            {
+                final String[] pack;
+                if(ids.size()-i < 100)
+                {
+                    Object[] objects = Arrays.copyOfRange(array, i, ids.size());
+                    pack = new String[objects.length];
+                    for(int cc = 0; cc < objects.length; cc++)
+                    {
+                        pack[cc] = (String) objects[cc];
+                    }
+                }
+                else
+                {
+                    Object[] objects = Arrays.copyOfRange(array, i, i + 100);
+                    pack = new String[objects.length];
+                    for(int cc = 0; cc < objects.length; cc++)
+                    {
+                        pack[cc] = (String) objects[cc];
+                    }
+                }
+                final Map<String, Trackinfo> adder = getTrackFeatures(List.of(pack));
+                trackFeatures.putAll(adder);
+            }
         } catch (IOException e) {
             e.printStackTrace();
-        }*/
+        }
 
         for (Track t : playlist)
         {
             Trackinfo trackInfo = null;
-            try {
-                trackInfo = getTrackFeatures(t.getId());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            /*trackInfo = trackFeatures.get(t.getId());*/
-            /*try {
-                final Trackinfo[] trackinfos = new Trackinfo[1];
-                Thread thread = new Thread(() -> {
-                    trackinfos[0] = getTrackInfo(t.getTitle(), t.getAuthor());
-                });
-                thread.start();
-                long start = Instant.now().toEpochMilli();
-                while (trackinfos[0] == null && Instant.now().toEpochMilli() - start < 11000)
-                {
-                    Thread.sleep(10);
-                };
-                if(trackinfos[0]!=null)
-                {
-                    trackInfo = trackinfos[0];
+            if(trackFeatures.isEmpty()) {
+                try {
+                    trackInfo = getTrackFeatures(t.getId());
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
-            catch (Exception e)
-            {
-
-            }*/
+            else {
+                trackInfo = trackFeatures.get(t.getId());
+            }
             t.setBpm(trackInfo.getBpm());
             c++;
             System.out.print("\r" + 100.0f*c/ playlist.size() + "%");
