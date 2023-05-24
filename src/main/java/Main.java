@@ -6,8 +6,6 @@ import org.jsoup.nodes.Element;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.Point;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
 
 import javax.net.ssl.*;
 import java.awt.*;
@@ -20,8 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Base64;
+import java.util.*;
 import java.util.List;
 
 public class Main{
@@ -98,35 +95,20 @@ public class Main{
         return "https://api.spotify.com/v1/playlists/"+playlistId;
     }
 
-    private static String getBearerToken()
+    private static String getBearerToken(final String playlistId)
     {
-        String bt = "";
-        final String urlstr = "https://accounts.spotify.com/api/token";
-        try {
-            URL url = new URL(urlstr);
+        String fetchUrl = getSiteUrl(playlistId);
 
-            HttpsURLConnection urlConnection = (HttpsURLConnection)url.openConnection();
+        String html2 = fetchHtml(fetchUrl);
 
-            urlConnection.setRequestMethod("POST");
-            urlConnection.setRequestProperty("Accept", "*/*");
-            urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            urlConnection.setRequestProperty("User-Agent", "Mozilla/5.0");
-            urlConnection.setRequestProperty("authorization", "Basic " + Base64.getEncoder().encodeToString(("31hzddvcnmqgak3jpjgtcdbu6rjy:takaw82139").getBytes()));
+        Document document2 = Jsoup.parse(html2);
+        Element ele = document2.getElementById("session");
+        String session = ele.html();
+        JSONObject tokens = new JSONObject(session);
 
-            urlConnection.setDoOutput(true);
+        final String accessToken = tokens.getString("accessToken");
 
-            urlConnection.getOutputStream().write("grant_type=client_credentials".getBytes(StandardCharsets.UTF_8));
-
-            InputStream inputStream = urlConnection.getInputStream();
-            String output = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-            System.out.println(output);
-
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return bt;
+        return accessToken;
     }
 
     private static String getSiteUrl(final String playlistId)
@@ -204,8 +186,10 @@ public class Main{
             final JSONArray items = playlist.getJSONArray("items");
             for(int i = 0; i < items.length(); i++) {
                 final JSONObject track = items.getJSONObject(i);
-                String title = track.getJSONObject("track").getString("name");
-                JSONArray artists = track.getJSONObject("track").getJSONArray("artists");
+                final JSONObject trk = track.getJSONObject("track");
+                String title = trk.getString("name");
+                String id = trk.getString("id");
+                JSONArray artists = trk.getJSONArray("artists");
                 final StringBuilder sb = new StringBuilder();
                 boolean first = true;
                 for (int a = 0; a < artists.length(); a++) {
@@ -217,7 +201,8 @@ public class Main{
                     sb.append(author);
                     first = false;
                 }
-                tracks.add(new Track(title,sb.toString(),0));
+
+                tracks.add(new Track(title,sb.toString(),0, id));
             }
         }
         catch (final Exception e)
@@ -254,6 +239,100 @@ public class Main{
         List<Track> fetchedPlaylistTracks = fetchPlaylistTracks(playlistId, accessToken);
 
         return fetchedPlaylistTracks;
+    }
+
+    private static String getFetchFeatureUrl(final List<String> songIds)
+    {
+        final StringBuilder sb = new StringBuilder();
+
+        boolean f = true;
+        for(final String s : songIds)
+        {
+            if(!f)
+            {
+                sb.append(",");
+            }
+            else
+            {
+                f = true;
+            }
+            sb.append(s);
+        }
+
+        return "https://api.spotify.com/v1/audio-features?ids="+sb.toString();
+    }
+
+    private static Map<String, Trackinfo> getTrackFeatures(final List<String> songIds) throws IOException {
+
+        final String bearerToken = getBearerToken("3fGATKVMlgZsfLt9pNg4f7");
+
+        final String trackFeatures = getFetchFeatureUrl(songIds);
+
+        final Map<String,Trackinfo> features = new HashMap<>();
+
+        try {
+
+            String accessToken = getAccessToken();
+
+            URL url = new URL(trackFeatures);
+            HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
+            urlConnection.setRequestProperty("client-token", accessToken);
+            urlConnection.setRequestProperty("authorization", " Bearer " + bearerToken);
+
+            String s = new String(urlConnection.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            JSONObject jsonObject = new JSONObject(s);
+
+            JSONArray audioFeatures = jsonObject.getJSONArray("audio_features");
+
+            for(int i = 0; i < audioFeatures.length(); i++)
+            {
+                final JSONObject feature = audioFeatures.getJSONObject(i);
+                final String tid = feature.getString("id");
+                int durationMs = feature.getInt("duration_ms");
+                float tempo = feature.getFloat("tempo");
+                features.put(tid, new Trackinfo((int)tempo, durationMs));
+            }
+
+
+        }
+        catch (final Exception e)
+        {
+            e.printStackTrace();
+        }
+        return features;
+    }
+
+    private static Trackinfo getTrackFeatures(final String songId) throws IOException {
+
+        final String bearerToken = getBearerToken("3fGATKVMlgZsfLt9pNg4f7");
+
+        final String trackFeatures = "https://api.spotify.com/v1/audio-analysis/"+songId;
+
+
+        try {
+
+            String accessToken = getAccessToken();
+
+            URL url = new URL(trackFeatures);
+            HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
+            urlConnection.setRequestProperty("client-token", accessToken);
+            urlConnection.setRequestProperty("authorization", " Bearer " + bearerToken);
+
+            String s = new String(urlConnection.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            JSONObject jsonObject = new JSONObject(s);
+
+            final JSONObject feature = jsonObject.getJSONObject("track");
+
+            int durationMs = (int) (1000*feature.getFloat("duration"));
+            float tempo = feature.getFloat("tempo");
+            return new Trackinfo((int)tempo, durationMs);
+
+        }
+        catch (final Exception e)
+        {
+            e.printStackTrace();
+        }
+        return new Trackinfo(0, -1);
     }
 
     private static Trackinfo querySong(final String id) throws IOException {
@@ -400,10 +479,30 @@ public class Main{
 
         int c = 0;
         System.out.println("Fetching bpm: ");
+
+        /*final List<String> ids = new ArrayList<>();
         for (Track t : playlist)
         {
-            Trackinfo trackInfo = new Trackinfo(0,-1);
+            ids.add(t.getId());
+        }
+
+        Map<String, Trackinfo> trackFeatures = null;
+        try {
+            trackFeatures = getTrackFeatures(ids);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }*/
+
+        for (Track t : playlist)
+        {
+            Trackinfo trackInfo = null;
             try {
+                trackInfo = getTrackFeatures(t.getId());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            /*trackInfo = trackFeatures.get(t.getId());*/
+            /*try {
                 final Trackinfo[] trackinfos = new Trackinfo[1];
                 Thread thread = new Thread(() -> {
                     trackinfos[0] = getTrackInfo(t.getTitle(), t.getAuthor());
@@ -422,7 +521,7 @@ public class Main{
             catch (Exception e)
             {
 
-            }
+            }*/
             t.setBpm(trackInfo.getBpm());
             c++;
             System.out.print("\r" + 100.0f*c/ playlist.size() + "%");

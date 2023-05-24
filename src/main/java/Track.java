@@ -5,12 +5,25 @@ public class Track implements Comparable<Track> {
     private String title;
     private String author;
 
+    private String id;
+
     private int bpm;
 
-    public Track(String title, String author, int bpm) {
+    public Track(String title, String author, int bpm, final String id) {
         this.title = title;
         this.author = author;
         this.bpm = bpm;
+        this.id = id;
+    }
+
+
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getTitle() {
