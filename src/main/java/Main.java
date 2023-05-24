@@ -367,7 +367,7 @@ public class Main{
 
     private static Trackinfo querySong(final String id) throws IOException {
 
-
+        allowSelfSignedSSL();
         final String fetchUrl = "https://songbpm.com/searches/" +id;
 
         String s = fetchHtml(fetchUrl);
