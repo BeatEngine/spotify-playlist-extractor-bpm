@@ -169,13 +169,13 @@ public class Main{
 
     }
 
-    private static List<Track> fetchPlaylistTracks(final String playlistId, final String bearerToken)
+    private static List<Track> fetchPlaylistTracks(final String playlistId, final String bearerToken, int offset)
     {
         ArrayList<Track> tracks = new ArrayList<>();
         try {
 
             String accessToken = getAccessToken();
-            final String fetchurl = "https://api.spotify.com/v1/playlists/"+playlistId+"/tracks";
+            final String fetchurl = "https://api.spotify.com/v1/playlists/"+playlistId+"/tracks" + "?fields=total,limit,items&offset="+offset+"&limit=100";
             URL url = new URL(fetchurl);
             HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
             urlConnection.setRequestProperty("client-token", accessToken);
@@ -236,7 +236,15 @@ public class Main{
 
         String fetchedPlaylistName = fetchPlaylistName(playlistId, accessToken);
 
-        List<Track> fetchedPlaylistTracks = fetchPlaylistTracks(playlistId, accessToken);
+        List<Track> fetchedPlaylistTracks = fetchPlaylistTracks(playlistId, accessToken, 0);
+
+        int o = 0;
+        while (fetchedPlaylistTracks.size() % 100 == 0)
+        {
+            final List<Track> fetchedPlaylistTracksAdd = fetchPlaylistTracks(playlistId, accessToken, o);
+            fetchedPlaylistTracks.addAll(fetchedPlaylistTracksAdd);
+            o += 100;
+        }
 
         return fetchedPlaylistTracks;
     }
