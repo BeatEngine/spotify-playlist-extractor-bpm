@@ -314,7 +314,7 @@ public class Main{
         return features;
     }
 
-    private static Trackinfo getTrackFeatures(final String songId) throws IOException {
+    private static Trackinfo getTrackFeatures(final String songId, final String title, final String author) throws IOException {
 
         final String bearerToken = getBearerToken("3fGATKVMlgZsfLt9pNg4f7");
 
@@ -348,7 +348,7 @@ public class Main{
             trackinfo[0] = null;
             Thread thread = new Thread(() -> {
                 try {
-                    trackinfo[0] = querySong(songId);
+                    trackinfo[0] = querySong(title, author);
                 } catch (IOException ex) {
                     System.out.println("No info available: " + ex.getMessage());
                 }
@@ -365,8 +365,8 @@ public class Main{
         return new Trackinfo(0, -1);
     }
 
-    private static Trackinfo querySong(final String id) throws IOException {
-
+    private static Trackinfo querySong(final String title, final String author) throws IOException {
+        String id = queryTrackId(title, author);
         allowSelfSignedSSL();
         final String fetchUrl = "https://songbpm.com/searches/" +id;
 
@@ -468,8 +468,7 @@ public class Main{
     public static Trackinfo getTrackInfo(final String title, final String author)
     {
         try {
-            String traclId = queryTrackId(title, author);
-            return querySong(traclId);
+            return querySong(title, author);
         }
         catch (final Exception e)
         {
@@ -552,7 +551,7 @@ public class Main{
             Trackinfo trackInfo = null;
             if(trackFeatures.isEmpty()) {
                 try {
-                    trackInfo = getTrackFeatures(t.getId());
+                    trackInfo = getTrackFeatures(t.getId(), t.getTitle(), t.getAuthor());
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
